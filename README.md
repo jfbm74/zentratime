@@ -70,7 +70,7 @@ Una aplicación web moderna para la gestión y análisis de registros biométric
 # Construir y ejecutar en modo desarrollo
 docker-compose --profile dev up --build
 
-# Acceder en: http://localhost:5173
+# Acceder en: http://localhost:8173
 ```
 
 #### Producción
@@ -78,7 +78,7 @@ docker-compose --profile dev up --build
 # Construir y ejecutar en modo producción
 docker-compose up --build
 
-# Acceder en: http://localhost:3000
+# Acceder en: http://localhost:8080
 ```
 
 ## 📖 Guía de Uso
