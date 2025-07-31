@@ -1,4 +1,4 @@
-# 🕒 Biometric Dashboard
+# 🕒 Zentratime - Biometric Dashboard
 
 Una aplicación web moderna para la gestión y análisis de registros biométricos de empleados. Permite procesar archivos Excel con datos de entrada y salida, detectar anomalías, y generar reportes detallados de asistencia.
 
@@ -310,4 +310,4 @@ Este proyecto está bajo la Licencia MIT - ver el archivo [LICENSE](LICENSE) par
 
 ---
 
-**¿Tienes preguntas?** Abre un [issue](https://github.com/username/biometric-dashboard/issues) o contacta al equipo de desarrollo.
+**¿Tienes preguntas?** Abre un [issue](https://github.com/jfbm74/zentratime/issues) o contacta al equipo de desarrollo.
