@@ -21,8 +21,8 @@ const RecordsTable = ({ employeeId, view, currentWeek }) => {
     .filter(r => r.dateTime >= periodStart && r.dateTime <= periodEnd)
     .sort((a, b) => a.dateTime - b.dateTime)
 
-  // Group records by day
-  const groupedRecords = groupRecordsByDay(employeeRecords)
+  // Group records by work shift
+  const groupedShifts = groupRecordsByWorkShift(employeeRecords)
 
   const getTimeBadgeClass = (record) => {
     if (record.suggested) {
@@ -74,7 +74,14 @@ const RecordsTable = ({ employeeId, view, currentWeek }) => {
       if (state === 'entrada' && entryTime === null) {
         entryTime = record.dateTime
       } else if (state === 'salida' && entryTime !== null) {
-        const workingMinutes = (record.dateTime - entryTime) / (1000 * 60)
+        let workingMinutes = (record.dateTime - entryTime) / (1000 * 60)
+        
+        // Si la salida es antes que la entrada (cruzó medianoche), ajustar el cálculo
+        if (record.dateTime < entryTime) {
+          // Añadir 24 horas en minutos
+          workingMinutes += 24 * 60
+        }
+        
         totalWorkingMinutes += workingMinutes
         entryTime = null
       }
@@ -85,7 +92,13 @@ const RecordsTable = ({ employeeId, view, currentWeek }) => {
       // Fallback al método anterior si no hay entradas/salidas claras
       const firstRecord = sortedRecords[0]
       const lastRecord = sortedRecords[sortedRecords.length - 1]
-      const totalMinutes = (lastRecord.dateTime - firstRecord.dateTime) / (1000 * 60)
+      let totalMinutes = (lastRecord.dateTime - firstRecord.dateTime) / (1000 * 60)
+      
+      // Ajustar si cruza medianoche
+      if (lastRecord.dateTime < firstRecord.dateTime) {
+        totalMinutes += 24 * 60
+      }
+      
       totalWorkingMinutes = Math.max(0, totalMinutes - 60)
     }
     
@@ -98,6 +111,7 @@ const RecordsTable = ({ employeeId, view, currentWeek }) => {
   const hasProblems = (dayRecords) => {
     return dayRecords.some(r => !r.state || r.anomaly || r.suggested)
   }
+
 
   if (employeeRecords.length === 0) {
     return (
@@ -130,67 +144,69 @@ const RecordsTable = ({ employeeId, view, currentWeek }) => {
           </tr>
         </thead>
         <tbody>
-          {Object.entries(groupedRecords)
-            .sort(([dateA], [dateB]) => {
-              // Fix: Parse dates manually to avoid timezone issues in sorting
-              const [yearA, monthA, dayA] = dateA.split('-').map(Number)
-              const [yearB, monthB, dayB] = dateB.split('-').map(Number)
-              const dateAObj = new Date(yearA, monthA - 1, dayA)
-              const dateBObj = new Date(yearB, monthB - 1, dayB)
-              return dateAObj - dateBObj
-            })
-            .map(([dateKey, dayRecords]) => {
-            const dayHours = calculateDayHours(dayRecords)
-            const problems = hasProblems(dayRecords)
-            // Fix: Parse dateKey manually to avoid timezone issues
-            const [year, month, day] = dateKey.split('-').map(Number)
-            const date = new Date(year, month - 1, day)
+          {groupedShifts
+            .sort((a, b) => a.date - b.date)
+            .map((shift, shiftIndex) => {
+            const shiftHours = calculateDayHours(shift.allRecords)
+            const problems = hasProblems(shift.allRecords)
+            const shiftDate = shift.date
 
             return (
               <tr 
-                key={dateKey}
+                key={shiftIndex}
                 className={`border-b border-gray-100 hover:bg-gray-50 ${
                   problems ? 'bg-warning-25' : ''
                 }`}
               >
                 <td className="py-4 px-4 w-48">
-                  <div className="font-medium text-gray-900">
-                    {format(date, 'EEEE d MMM', { locale: es })}
+                  <div className="font-medium text-gray-900 flex items-center gap-2">
+                    {format(shiftDate, 'EEEE d MMM', { locale: es })}
+                    {shift.isNightShift && (
+                      <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-indigo-100 text-indigo-800">
+                        +1
+                      </span>
+                    )}
                   </div>
                 </td>
                 <td className="py-4 px-4 min-w-[400px]">
                   <div className="flex flex-nowrap gap-2 overflow-x-auto">
-                    {dayRecords.map((record, index) => (
-                      <div key={index} className="relative">
-                        <span 
-                          className={`inline-block px-3 py-1 rounded-full text-xs font-medium ${getTimeBadgeClass(record)}`}
-                        >
-                          {format(record.dateTime, 'h:mm a')} {record.state || 'Sin estado'}
-                        </span>
-                        {record.suggested && (
-                          <>
-                            <div className="absolute -top-2 -right-1 bg-yellow-500 text-white text-xs px-1 rounded text-[9px] font-bold">
-                              SUG
+                    {shift.allRecords.map((record, index) => {
+                      const isNextDay = shift.entry && record.dateTime.toDateString() !== shift.entry.dateTime.toDateString()
+                      return (
+                        <div key={index} className="relative">
+                          <span 
+                            className={`inline-block px-3 py-1 rounded-full text-xs font-medium ${getTimeBadgeClass(record)}`}
+                          >
+                            {isNextDay && (
+                              <span className="text-[10px] mr-1">{format(record.dateTime, 'd MMM')}</span>
+                            )}
+                            {format(record.dateTime, 'h:mm a')} {record.state || 'Sin estado'}
+                          </span>
+                          {record.suggested && (
+                            <>
+                              <div className="absolute -top-2 -right-1 bg-yellow-500 text-white text-xs px-1 rounded text-[9px] font-bold">
+                                SUG
+                              </div>
+                              <SuggestionControls recordId={record.id} />
+                            </>
+                          )}
+                          {record.confirmed && (
+                            <div className="absolute -top-2 -right-1 bg-green-500 text-white text-xs px-1 rounded text-[9px] font-bold">
+                              ✓
                             </div>
-                            <SuggestionControls recordId={record.id} />
-                          </>
-                        )}
-                        {record.confirmed && (
-                          <div className="absolute -top-2 -right-1 bg-green-500 text-white text-xs px-1 rounded text-[9px] font-bold">
-                            ✓
-                          </div>
-                        )}
-                        {record.hasProblems && !record.suggested && (
-                          <div className="absolute -top-2 -right-1 bg-red-500 text-white text-xs px-1 rounded text-[9px] font-bold">
-                            !
-                          </div>
-                        )}
-                      </div>
-                    ))}
+                          )}
+                          {record.hasProblems && !record.suggested && (
+                            <div className="absolute -top-2 -right-1 bg-red-500 text-white text-xs px-1 rounded text-[9px] font-bold">
+                              !
+                            </div>
+                          )}
+                        </div>
+                      )
+                    })}
                   </div>
                 </td>
                 <td className="py-4 px-4 w-32 font-semibold text-gray-900">
-                  {dayHours}
+                  {shiftHours}
                 </td>
                 <td className="py-4 px-4">
                   {problems ? (
@@ -246,30 +262,66 @@ const SuggestionControls = ({ recordId }) => {
   )
 }
 
-// Helper function to group records by day
-function groupRecordsByDay(records) {
-  const groups = records.reduce((groups, record) => {
-    // Usar getFullYear, getMonth, getDate para evitar problemas de zona horaria
-    const date = record.dateTime
-    const year = date.getFullYear()
-    const month = String(date.getMonth() + 1).padStart(2, '0')
-    const day = String(date.getDate()).padStart(2, '0')
-    const dateKey = `${year}-${month}-${day}`
+// Helper function to group records by work shifts instead of calendar days
+function groupRecordsByWorkShift(records) {
+  const shifts = []
+  const sortedRecords = [...records].sort((a, b) => a.dateTime - b.dateTime)
+  
+  let currentShift = null
+  let pendingEntry = null
+  
+  for (const record of sortedRecords) {
+    const state = record.state?.toLowerCase()
     
-    
-    if (!groups[dateKey]) {
-      groups[dateKey] = []
+    if (state === 'entrada') {
+      // Si hay una entrada pendiente sin salida, cerrar ese turno
+      if (pendingEntry) {
+        shifts.push(currentShift)
+      }
+      
+      // Iniciar nuevo turno
+      currentShift = {
+        entry: record,
+        exit: null,
+        allRecords: [record],
+        date: record.dateTime,
+        isNightShift: record.dateTime.getHours() >= 18
+      }
+      pendingEntry = record
+    } else if (state === 'salida' && currentShift) {
+      // Agregar salida al turno actual
+      currentShift.exit = record
+      currentShift.allRecords.push(record)
+      
+      // Si la salida es al día siguiente, marcar como turno nocturno
+      if (currentShift.entry && record.dateTime.toDateString() !== currentShift.entry.dateTime.toDateString()) {
+        currentShift.isNightShift = true
+      }
+      
+      shifts.push(currentShift)
+      currentShift = null
+      pendingEntry = null
+    } else if (currentShift) {
+      // Otros registros (almuerzo, etc.) se agregan al turno actual
+      currentShift.allRecords.push(record)
+    } else {
+      // Registro suelto sin turno asociado
+      shifts.push({
+        entry: null,
+        exit: null,
+        allRecords: [record],
+        date: record.dateTime,
+        isNightShift: false
+      })
     }
-    groups[dateKey].push(record)
-    return groups
-  }, {})
+  }
   
-  // Sort records within each day by time
-  Object.keys(groups).forEach(dateKey => {
-    groups[dateKey].sort((a, b) => a.dateTime - b.dateTime)
-  })
+  // Si queda un turno pendiente sin cerrar
+  if (currentShift) {
+    shifts.push(currentShift)
+  }
   
-  return groups
+  return shifts
 }
 
 export default RecordsTable
